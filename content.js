@@ -70,9 +70,6 @@ function GetKbbCarCategories(kbbCategoriesUrl){
         });
         console.log(kbbCarCategories);
     
-        // carCategories.forEach(function (item){
-        //     console.log(getQueryString('category', item));
-        // });
         GetKbbCarStyles(kbbCarCategories);
       });
 }
@@ -80,12 +77,14 @@ function GetKbbCarCategories(kbbCategoriesUrl){
 function GetKbbCarStyles(kbbCarCategoriesUrls) {
     chrome.runtime.sendMessage({categoryUrls: kbbCarCategoriesUrls}, function(response) {
         var resultHtmlStrings = Array.from(response.result);
-        var styles = [];
+        var stylesLinks = [];
 
+         //convert html strings to doc objects
         var kbbStyleDocs = resultHtmlStrings.map(function (item) {
             return stringToHTMLDoc(item);
         });
 
+        //get all style links 
         kbbStyleDocs.forEach(function (doc){
             var links = Array.from(doc.getElementsByTagName('a')).map(function (item) {
                 return item.href;
@@ -96,13 +95,24 @@ function GetKbbCarStyles(kbbCarCategoriesUrls) {
             });
 
             kbbStyleLinks.forEach(function (link){
-                styles.push(link);
+                stylesLinks.push(link);
             });
             
         });
-        console.log(styles);
+        console.log(stylesLinks);
+
+        var styleTypes = [];
+        stylesLinks.forEach(function (styleLink){
+            var partsOfStr = styleLink.split('/');
+            styleTypes.push(partsOfStr[6]);
+            });
+
+            console.log(styleTypes);
       });
 }
+
+
+//`https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/${style}}/?category=${category}&condition=${condition-after-map}&intent=buy-used&pricetype=retail`
 
 
 
