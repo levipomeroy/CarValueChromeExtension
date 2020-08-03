@@ -1,8 +1,16 @@
 chrome.runtime.onMessage.addListener(
     function (request, sender, sendResponse) {
-        //add logic to handle multiple message types
-        sendResponse({ result: GetKBBHtml(request.url) });
-       // sendResponse({ result: request.url });
+       if(request.url != null && request.url != undefined) {
+           sendResponse({ result: GetKBBHtml(request.url) });
+       }
+       else if(request.categoryUrls != null && request.categoryUrls != undefined) {
+           var urlsArray = Array.from(request.categoryUrls);
+           var htmlStrings = [];
+           urlsArray.forEach(function (item){
+            htmlStrings.push(GetKBBHtml(item));
+           });
+           sendResponse({result: htmlStrings});
+       }
     });
 
 function GetKBBHtml(url) {

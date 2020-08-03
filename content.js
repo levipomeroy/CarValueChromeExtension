@@ -1,5 +1,4 @@
 /* Do best guess based on styleGuess, then show other style options to correct if wrong*/
-
 /*Look up zip from lat/lon on map - otherwise (if that doesnt always exist) use ciyy zip lookup */
 
 var craigsModel = {
@@ -13,61 +12,99 @@ var craigsModel = {
     cylinders: "",
     drive: ""
 }
+var categoriesListUrl;
+var kbbCarCategories;
 
-var attrgroupElements = document.getElementsByClassName("mapAndAttrs")[0].getElementsByClassName("attrgroup");
-var carNameComponents = attrgroupElements[0].getElementsByTagName("span")[0].innerHTML.split(" ");
-var attrs = attrgroupElements[1].getElementsByTagName("span");
-let attrsArray = Array.from(attrs);
+GetCraigslistData();
+GetKbbCarCategories(categoriesListUrl);
 
-craigsModel.year = cleanHtmlString(carNameComponents[0]);
-craigsModel.make = cleanHtmlString(carNameComponents[1]);
-craigsModel.model = cleanHtmlString(carNameComponents[2]);
-var styleGuess = carNameComponents[3];
+function GetCraigslistData()
+{
+    var attrgroupElements = document.getElementsByClassName("mapAndAttrs")[0].getElementsByClassName("attrgroup");
+    var carNameComponents = attrgroupElements[0].getElementsByTagName("span")[0].innerHTML.split(" ");
+    var attrs = attrgroupElements[1].getElementsByTagName("span");
+    let attrsArray = Array.from(attrs);
+    
+    craigsModel.year = cleanHtmlString(carNameComponents[0]);
+    craigsModel.make = cleanHtmlString(carNameComponents[1]);
+    craigsModel.model = cleanHtmlString(carNameComponents[2]);
+    var styleGuess = carNameComponents[3];
+    
+    categoriesListUrl = `https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/styles/?intent=buy-used/`;
+    console.log(categoriesListUrl);
+    
+    var odometerElement = attrsArray.find(x => x.innerHTML.includes("odometer"));
+    craigsModel.odometer = odometerElement != null ? cleanHtmlString(odometerElement.innerHTML).match(/\d+/)[0] : "unknown";
+    
+    var conditionElement = attrsArray.find(x => x.innerHTML.includes("condition"));
+    craigsModel.condition = conditionElement != null ? cleanHtmlString(conditionElement.innerHTML) : "unknown";
+    
+    var typeElement = attrsArray.find(x => x.innerHTML.includes("type"));
+    craigsModel.type = typeElement != null ? cleanHtmlString(typeElement.innerHTML) : "unknown";
+    
+    var colorElement = attrsArray.find(x => x.innerHTML.includes("paint color"));
+    craigsModel.color = colorElement != null ? cleanHtmlString(colorElement.innerHTML) : "unknown";
+    
+    var cylindersElement = attrsArray.find(x => x.innerHTML.includes("cylinders"));
+    craigsModel.cylinders = cylindersElement != null ? cleanHtmlString(cylindersElement.innerHTML).match(/\d+/)[0] : "unknown";
+    
+    var driveElement = attrsArray.find(x => x.innerHTML.includes("drive"));
+    craigsModel.drive = driveElement != null ? cleanHtmlString(driveElement.innerHTML) : "unknown";
+    
+    console.log(craigsModel);
+}
 
-var stylesListUrl = `https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/styles/?intent=buy-used/`;
-console.log(stylesListUrl);
+function GetKbbCarCategories(kbbCategoriesUrl){
+    chrome.runtime.sendMessage({url: kbbCategoriesUrl}, function(response) {
+        //convert html string to doc object
+        var kbbDOM = stringToHTMLDoc(response.result);
+    
+        //get all links from doc 
+        var links = Array.from(kbbDOM.getElementsByTagName('a')).map(function (item) {
+            return item.href;
+        });
+    
+        //get kbb links for categories
+        kbbCarCategories = links.filter(function (item) {
+            return item.includes("kbb") && item.includes("category=");
+        });
+        console.log(kbbCarCategories);
+    
+        // carCategories.forEach(function (item){
+        //     console.log(getQueryString('category', item));
+        // });
+        GetKbbCarStyles(kbbCarCategories);
+      });
+}
 
-var odometerElement = attrsArray.find(x => x.innerHTML.includes("odometer"));
-craigsModel.odometer = odometerElement != null ? cleanHtmlString(odometerElement.innerHTML).match(/\d+/)[0] : "unknown";
+function GetKbbCarStyles(kbbCarCategoriesUrls) {
+    chrome.runtime.sendMessage({categoryUrls: kbbCarCategoriesUrls}, function(response) {
+        var resultHtmlStrings = Array.from(response.result);
+        var styles = [];
 
-var conditionElement = attrsArray.find(x => x.innerHTML.includes("condition"));
-craigsModel.condition = conditionElement != null ? cleanHtmlString(conditionElement.innerHTML) : "unknown";
+        var kbbStyleDocs = resultHtmlStrings.map(function (item) {
+            return stringToHTMLDoc(item);
+        });
 
-var typeElement = attrsArray.find(x => x.innerHTML.includes("type"));
-craigsModel.type = typeElement != null ? cleanHtmlString(typeElement.innerHTML) : "unknown";
+        kbbStyleDocs.forEach(function (doc){
+            var links = Array.from(doc.getElementsByTagName('a')).map(function (item) {
+                return item.href;
+            });
 
-var colorElement = attrsArray.find(x => x.innerHTML.includes("paint color"));
-craigsModel.color = colorElement != null ? cleanHtmlString(colorElement.innerHTML) : "unknown";
+            var kbbStyleLinks = links.filter(function (item) {
+                return item.includes("kbb") && item.includes("options");
+            });
 
-var cylindersElement = attrsArray.find(x => x.innerHTML.includes("cylinders"));
-craigsModel.cylinders = cylindersElement != null ? cleanHtmlString(cylindersElement.innerHTML).match(/\d+/)[0] : "unknown";
+            kbbStyleLinks.forEach(function (link){
+                styles.push(link);
+            });
+            
+        });
+        console.log(styles);
+      });
+}
 
-var driveElement = attrsArray.find(x => x.innerHTML.includes("drive"));
-craigsModel.drive = driveElement != null ? cleanHtmlString(driveElement.innerHTML) : "unknown";
 
-console.log(craigsModel);
-
-//get kbb car categories
-chrome.runtime.sendMessage({url: stylesListUrl}, function(response) {
-    //convert html string to doc object
-    var kbbDOM = stringToHTMLDoc(response.result);
-    console.log(kbbDOM);
-
-    //get all links from doc 
-    var links = Array.from(kbbDOM.getElementsByTagName('a')).map(function (item) {
-        return item.href;
-    });
-
-    //get kbb links for categories
-    var carCategories = links.filter(function (item) {
-        return item.includes("kbb") && item.includes("category=");
-    });
-    console.log(carCategories);
-
-    // carCategories.forEach(function (item){
-    //     console.log(getQueryString('category', item));
-    // });
-  });
 
 
 
