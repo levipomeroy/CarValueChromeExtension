@@ -11,6 +11,9 @@ chrome.runtime.onMessage.addListener(
            });
            sendResponse({result: htmlStrings});
        }
+       else if(request.kbbPriceEndpoint != null && request.kbbPriceEndpoint != undefined){
+        sendResponse({ result: GetKBBHtml(request.kbbPriceEndpoint) });
+       }
     });
 
 function GetKBBHtml(url) {
