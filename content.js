@@ -118,6 +118,7 @@ function GetKbbCarCategories(kbbCategoriesUrl){
 
                 var price = jsonResultObj.Data.APIData.vehicle.values[2].value;
                 console.log(price);
+                InjectIntoPage(jsonResultObj.Data.APIData.vehicle.values);
               });
 
             });
@@ -160,6 +161,37 @@ function GetStyleProbabilities(KbbCategories) {
     return styleProbabilities;
 }
 
+function InjectIntoPage(prices){
+  var low = prices[2].low;
+  var high = prices[2].high;
+  var value = prices[2].value;
+
+  //outer div wrapper
+  var kbbOuterDiv = document.createElement("div"); 
+  kbbOuterDiv.innerHTML = "<strong>Kelley Blue Book Values</strong>";
+  kbbOuterDiv.style.padding = '10px';
+  kbbOuterDiv.style.border = 'thin solid black';
+  kbbOuterDiv.style.borderRadius = '10px';
+
+  //inner div
+  var innerDiv = document.createElement("div");
+
+  //prices section
+  var pricesP = document.createElement("p");
+  pricesP.className = 'attrgroup';
+  var valueSpan = document.createElement("span");
+  valueSpan.innerHTML = `Value: <strong>$${value}</strong><br>`;
+  var rangeSpan = document.createElement("span");
+  rangeSpan.innerHTML = `Range: <strong>$${low} - $${high}</strong>`;
+  pricesP.appendChild(valueSpan);
+  pricesP.appendChild(rangeSpan);
+
+
+  innerDiv.appendChild(pricesP);
+  kbbOuterDiv.appendChild(innerDiv);
+
+  document.getElementsByClassName("mapAndAttrs")[0].appendChild(kbbOuterDiv);
+}
 
 
 
@@ -185,7 +217,6 @@ var getQueryString = function ( field, url ) {
 	var string = reg.exec(href);
 	return string ? string[1] : null;
 };
-
 
 //Levenshtein distance string similarity - https://codepad.co/snippet/javascript-calculating-similarity-between-two-strings
 function similarity(s1, s2) {
