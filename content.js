@@ -1,7 +1,3 @@
-/* Do best guess based on styleGuess, then show other style options to correct if wrong*/
-/*Look up zip from lat/lon on map - otherwise (if that doesnt always exist) use ciyy zip lookup */
-/*`https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/${style}}/?category=${category}&condition=${condition-after-map}&intent=buy-used&pricetype=retail`*/
-
 var craigsModel = {
     year: "",
     make: "", 
@@ -69,104 +65,100 @@ function GetKbbCarCategories(kbbCategoriesUrl){
         var links = Array.from(kbbDOM.getElementsByTagName('a')).map(function (item) {
             return item.href;
         });
-        // console.log(links);
     
         //get kbb links for categories
         kbbCarCategories = links.filter(function (item) {
-            return item.includes(craigsModel.year) && item.includes("vehicleid");// && item.includes("category=");
+            return item.includes(craigsModel.year) && item.includes("vehicleid");
         });
-         console.log(kbbCarCategories);
-
-        var styleProbabilities = new Array();
-
-        kbbCarCategories.forEach(function (styleLink){
-            var partsOfStr = styleLink.split('/');
-            styleProbabilities.push({name: partsOfStr[6], percentSimilarity: similarity(partsOfStr[6], bestStyleGuessFromCraigslistInfo)} );
+        if(kbbCarCategories == null || kbbCarCategories == undefined || kbbCarCategories.length == 0) {
+            var categoryLinks = links.filter(function (item) {
+                return item.includes(craigsModel.year) && item.includes(craigsModel.year) && item.includes("category=");
             });
 
-            var styleProbabilities = styleProbabilities.sort(function (a, b) {
-                return  a.percentSimilarity < b.percentSimilarity ? 1 : -1;
-            })
-            console.log(styleProbabilities);
-            console.log("kbb style best guess: " + styleProbabilities[0].name);
+            chrome.runtime.sendMessage({categoryUrls: categoryLinks}, function(response) {
+              var resultHtmlStrings = Array.from(response.result);
+              // var stylesLinks = [];
+      
+              //console.log(resultHtmlStrings);
+      
+               //convert html strings to doc objects
+              var kbbStyleDocs = resultHtmlStrings.map(function (item) {
+                  return stringToHTMLDoc(item);
+              });
+      
+              //get all style links 
+              kbbStyleDocs.forEach(function (doc){
+                  var links = Array.from(doc.getElementsByTagName('a')).map(function (item) {
+                      return item.href;
+                  });
+      
+                  var kbbStyleLinks = links.filter(function (item) {
+                       return item.includes("kbb") && item.includes("options");
+                  });
+      
+                  kbbStyleLinks.forEach(function (link){
+                    kbbCarCategories.push(link);
+                  }); 
+              });
 
-            var bestGuessLink = kbbCarCategories.filter(function (item) {
+              var styleProbabilities = GetStyleProbabilities(kbbCarCategories);
+
+              var bestGuessBaseUrl = kbbCarCategories.filter(function (item) {
                 return item.split('/')[6] == styleProbabilities[0].name;
+              });
+
+              // var bestGuessFullLink = GetBestGuessLink(bestGuessBaseUrl, styleProbabilities[0].name);
+              // console.log(bestGuessFullLink);
+
+              var vehicleid = getParameterByName("vehicleid", bestGuessBaseUrl)
+              var kbbServiceUrl = `https://upa.syndication.kbb.com/usedcar/privateparty/buy/?apikey=2c190408-b9cf-402e-a312-df4cc0e0d0f0&zipcode=97086&vehicleid=${vehicleid}&pricetype=privateparty&condition=good&format=json`;
+              chrome.runtime.sendMessage({ kbbJsonApiService: kbbServiceUrl }, function (response) {
+                var jsonResultObj = JSON.parse(response.result);
+                console.log(jsonResultObj);
+
+                var price = jsonResultObj.Data.APIData.vehicle.values[2].value;
+                console.log(price);
+              });
+
             });
-            console.log(getParameterByName("vehicleid", bestGuessLink));
-            var vehicleid = getParameterByName("vehicleid", bestGuessLink)
-            //var bestGuessLink = `https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/${styleProbabilities[0].name}/?intent=buy-used&mileage=${craigsModel.odometer}&pricetype=private-party&condition=${craigsModel.}}`;
-            var bestGuessFullLink = `https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/${styleProbabilities[0].name}/?vehicleid=${vehicleid}&intent=buy-used&mileage=${craigsModel.odometer}&pricetype=private-party`;
+        }
+        else {
+          var styleProbabilities = GetStyleProbabilities(kbbCarCategories);
+  
+          var bestGuessBaseUrl = kbbCarCategories.filter(function (item) {
+            return item.split('/')[6] == styleProbabilities[0].name;
+          });
 
-            GetKbbBestPrice(bestGuessFullLink);
-
-       // GetKbbCarStyles(kbbCarCategories);
-      });
-}
-
-function GetKbbBestPrice(kbbBestGuessUrl) {
-    console.log("get value from: " + kbbBestGuessUrl);
-
-    chrome.runtime.sendMessage({kbbPriceEndpoint: kbbBestGuessUrl}, function(response) {
-        var kbbDOM = stringToHTMLDoc(response.result);
-        console.log(kbbDOM);
-
-        //var rangeBox = kbbDOM.getElementById("RangeBox");
-        var gs = kbbDOM.getElementsByTagName('g');
-        // Array.from(gs).forEach(function (item) {
-        //     console.log(item.id);
-        // })
-        // var rangeBox = Array.from(gs).filter(function (item) {
-        //     return item.id == "RangeBox";
-        // });
-        //console.log(rangeBox);
+          var bestGuessFullLink = GetBestGuessLink(bestGuessBaseUrl, styleProbabilities[0].name);
+          console.log(bestGuessFullLink);
+        }
       });
 }
 
 
-// function GetKbbCarStyles(kbbCarCategoriesUrls) {
-//     chrome.runtime.sendMessage({categoryUrls: kbbCarCategoriesUrls}, function(response) {
-//         var resultHtmlStrings = Array.from(response.result);
-//         var stylesLinks = [];
+function GetBestGuessLink(bestKbbBaseUrl, bestguessCategory) {
+  var vehicleid = getParameterByName("vehicleid", bestKbbBaseUrl)
+  //var bestGuessLink = `https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/${styleProbabilities[0].name}/?intent=buy-used&mileage=${craigsModel.odometer}&pricetype=private-party&condition=${craigsModel.}}`;
+  var bestGuessFullLink = `https://www.kbb.com/${craigsModel.make}/${craigsModel.model}/${craigsModel.year}/${bestguessCategory}/?vehicleid=${vehicleid}&intent=buy-used&mileage=${craigsModel.odometer}&pricetype=private-party`;
+  return bestGuessFullLink;
+}
 
-//          //convert html strings to doc objects
-//         var kbbStyleDocs = resultHtmlStrings.map(function (item) {
-//             return stringToHTMLDoc(item);
-//         });
+function GetStyleProbabilities(KbbCategories) {
+    var styleProbabilities = new Array();
 
-//         //get all style links 
-//         kbbStyleDocs.forEach(function (doc){
-//             var links = Array.from(doc.getElementsByTagName('a')).map(function (item) {
-//                 return item.href;
-//             });
-//             console.log(links);
+    KbbCategories.forEach(function (styleLink) {
+        var partsOfStr = styleLink.split('/');
+        styleProbabilities.push({ name: partsOfStr[6], percentSimilarity: similarity(partsOfStr[6], bestStyleGuessFromCraigslistInfo) });
+    });
 
-//             var kbbStyleLinks = links.filter(function (item) {
-//                  return item.includes("kbb") && item.includes("options");
-//             });
-//             console.log(kbbStyleLinks);
+    var styleProbabilities = styleProbabilities.sort(function (a, b) {
+        return  a.percentSimilarity < b.percentSimilarity ? 1 : -1;
+    })
+    console.log(styleProbabilities);
+    console.log("kbb style best guess: " + styleProbabilities[0].name);
 
-//             kbbStyleLinks.forEach(function (link){
-//                 stylesLinks.push(link);
-//             });
-            
-//         });
-//         console.log(stylesLinks);
-
-//         var styleTypes = [];
-//         stylesLinks.forEach(function (styleLink){
-//             var partsOfStr = styleLink.split('/');
-//             styleTypes.push(partsOfStr[6]);
-//             });
-
-//             console.log(styleTypes);
-//       });
-// }
-
-
-
-
-
+    return styleProbabilities;
+}
 
 
 
@@ -255,7 +247,7 @@ function similarity(s1, s2) {
 
 //             //craigs - excellent
 //         // case "":
-//         //     return "Very Goof Condition";
+//         //     return "Very Good Condition";
 //         // case "":
 //         //     return "Good Condition";
 //         // case "":
