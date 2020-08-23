@@ -56,6 +56,7 @@ function GetCraigslistData() {
 }
 
 function GetKbbCarDetails(kbbCategoriesUrl) {
+  InjectKBBModule();
   chrome.runtime.sendMessage({ url: kbbCategoriesUrl }, function (response) {
     var kbbDOM = stringToHTMLDoc(response.result); //convert html string to doc object
 
@@ -89,13 +90,14 @@ function GetKbbCarDetails(kbbCategoriesUrl) {
         });
       });
 
-        var styleProbabilities = GetStyleProbabilities(kbbCarCategories);
-
-         var styleUrl = kbbCarCategories.filter(function (item) {
-          return item.split('/')[6] == styleProbabilities[0].name;
-        });
-
+      var styleProbabilities = GetStyleProbabilities(kbbCarCategories);
       
+      var styleUrl = kbbCarCategories.filter(function (item) {
+        return item.split('/')[6] == styleProbabilities[0].name;
+      });
+      AddCategoriesSelectorToKBBModule(styleProbabilities[0].name);
+
+
       var vehicleid = getParameterByName("vehicleid", styleUrl)
       var kbbServiceUrl = `https://upa.syndication.kbb.com/usedcar/privateparty/buy/?apikey=2c190408-b9cf-402e-a312-df4cc0e0d0f0&zipcode=97086&vehicleid=${vehicleid}&pricetype=privateparty&condition=good&format=json`;
       chrome.runtime.sendMessage({ kbbJsonApiService: kbbServiceUrl }, function (response) {
@@ -104,7 +106,7 @@ function GetKbbCarDetails(kbbCategoriesUrl) {
 
         var price = jsonResultObj.Data.APIData.vehicle.values[2].value;
         console.log(price);
-        InjectIntoPage(jsonResultObj.Data.APIData.vehicle.values, kbbCarCategories);
+        AddValuesToKBBModule(jsonResultObj.Data.APIData.vehicle.values);
       });
 
     });
@@ -118,15 +120,15 @@ function GetKbbCarDetailsForKnownType(knownType) {
   });
 
   var vehicleid = getParameterByName("vehicleid", styleUrl)
-      var kbbServiceUrl = `https://upa.syndication.kbb.com/usedcar/privateparty/buy/?apikey=2c190408-b9cf-402e-a312-df4cc0e0d0f0&zipcode=97086&vehicleid=${vehicleid}&pricetype=privateparty&condition=good&format=json`;
-      chrome.runtime.sendMessage({ kbbJsonApiService: kbbServiceUrl }, function (response) {
-        var jsonResultObj = JSON.parse(response.result);
-        console.log(jsonResultObj);
+  var kbbServiceUrl = `https://upa.syndication.kbb.com/usedcar/privateparty/buy/?apikey=2c190408-b9cf-402e-a312-df4cc0e0d0f0&zipcode=97086&vehicleid=${vehicleid}&pricetype=privateparty&condition=good&format=json`;
+  chrome.runtime.sendMessage({ kbbJsonApiService: kbbServiceUrl }, function (response) {
+    var jsonResultObj = JSON.parse(response.result);
+    console.log(jsonResultObj);
 
-        var price = jsonResultObj.Data.APIData.vehicle.values[2].value;
-        console.log(price);
-        InjectIntoPage(jsonResultObj.Data.APIData.vehicle.values, kbbCarCategories);
-      });
+    var price = jsonResultObj.Data.APIData.vehicle.values[2].value;
+    console.log(price);
+    AddValuesToKBBModule(jsonResultObj.Data.APIData.vehicle.values);
+  });
 }
 
 
@@ -153,38 +155,49 @@ function GetStyleProbabilities(KbbCategories) {
   return styleProbabilities;
 }
 
-function InjectIntoPage(prices, categoryUrls) {
-  var low = prices[2].low;
-  var high = prices[2].high;
-  var value = prices[2].value;
-
-  var categories = categoryUrls.map(function (item) {
-    return item.split('/')[6];
-  });
-
+function InjectKBBModule() {
   //outer div wrapper
   var kbbOuterDiv = document.createElement("div");
+  kbbOuterDiv.id = "kbbOuterDiv";
   kbbOuterDiv.style.padding = '10px';
   kbbOuterDiv.style.border = 'thin solid black';
   kbbOuterDiv.style.borderRadius = '10px';
 
   //inner div
   var innerDiv = document.createElement("div");
+  innerDiv.id = "innerDiv";
 
   var titleDiv = document.createElement("div");
+  titleDiv.id = "titleDiv";
   titleDiv.style.textAlign = "center";
   titleDiv.innerHTML = "<strong>Kelley Blue Book Values</strong>";
 
   //prices section
   var pricesP = document.createElement("p");
+  pricesP.id = "ValueParagraph";
   pricesP.className = 'attrgroup';
   var valueSpan = document.createElement("span");
-  valueSpan.innerHTML = `Value: <strong>$${value}</strong><br>`;
+  valueSpan.id = "ValueSpan";
+  valueSpan.innerHTML = 'Value: <strong>--</strong>';
   var rangeSpan = document.createElement("span");
-  rangeSpan.innerHTML = `Range: <strong>$${low} - $${high}</strong>`;
+  rangeSpan.id = "RangeSpan";
+  rangeSpan.innerHTML = 'Range: <strong>--</strong>';
   pricesP.appendChild(valueSpan);
+  pricesP.appendChild(document.createElement("br"));
   pricesP.appendChild(rangeSpan);
 
+  innerDiv.appendChild(titleDiv);
+  innerDiv.appendChild(pricesP);
+
+  kbbOuterDiv.appendChild(innerDiv);
+
+  document.getElementsByClassName("mapAndAttrs")[0].appendChild(kbbOuterDiv);
+}
+
+function AddCategoriesSelectorToKBBModule(selectedCategory) {
+  var categories = kbbCarCategories.map(function (item) {
+    return item.split('/')[6];
+  });
 
   var typeP = document.createElement("p");
   typeP.innerHTML = "<strong>Type</strong>";
@@ -194,22 +207,27 @@ function InjectIntoPage(prices, categoryUrls) {
     var option = document.createElement("option");
     option.innerHTML = convertStyleToDisplayNames(item);
     option.value = item;
+    if(item == selectedCategory) {
+      option.selected = 'selected';
+    }
     categorySelector.appendChild(option);
   });
   categorySelector.id = "categorySelector";
   categorySelector.addEventListener('change', carTypeSelected);
 
-
-  innerDiv.appendChild(titleDiv);
-  innerDiv.appendChild(pricesP);
+  var innerDiv = document.getElementById("innerDiv");
   innerDiv.appendChild(typeP);
   innerDiv.appendChild(categorySelector);
-
-  kbbOuterDiv.appendChild(innerDiv);
-
-  document.getElementsByClassName("mapAndAttrs")[0].appendChild(kbbOuterDiv);
 }
 
+function AddValuesToKBBModule(prices) {
+  var low = prices[2].low;
+  var high = prices[2].high;
+  var value = prices[2].value;
+
+  document.getElementById("ValueSpan").innerHTML = `Value: <strong>$${value}</strong>`;
+  document.getElementById("RangeSpan").innerHTML = `Range: <strong>$${low} - $${high}</strong>`;
+}
 
 function carTypeSelected() {
   var categorySelector = document.getElementById("categorySelector");
